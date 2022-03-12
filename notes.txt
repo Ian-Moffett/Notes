@@ -3,6 +3,7 @@ Template: https://github.com/Ian-Moffett/UEFITemplate2
 
 Create an array of uint8_t which will be our stack.
 We will allocate it in BSS.
+(I like to make it 8KB).
 
 "stivale2 offers a runtime terminal service which can be ditched at any
 time, but it provides an easy way to print out to graphical terminal,
@@ -30,12 +31,13 @@ we want to use a framebuffer
 static struct stivale2_header_tag_framebuffer lfb_tag = {
     .tag = {
         .identifier = STIVALE2_HEADER_TAG_FRAMEBUFFER_ID,
-        .next = (uint64_t)&terminal_hdr_tag
-        // Leave zero so the bootloader picks.
-        .framebuffer_width = 0,
-        .framebuffer_height = 0,
-        .framebuffer_bpp = 0,
+        .next = (uint64_t)&terminal_hdr_tag 
     },
+
+    // Leave zero so the bootloader picks.
+    .framebuffer_width = 0,
+    .framebuffer_height = 0,
+    .framebuffer_bpp = 0,
 };
 
 
