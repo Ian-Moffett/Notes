@@ -23,3 +23,26 @@ the interface between the local APIC and the I/O APIC. Contact Intel for detaile
 When a local APIC has sent an interrupt to its processor core for handling, the processor uses the interrupt and
 exception handling mechanism described in Chapter 6, “Interrupt and Exception Handling.” see interrupts/interrupts.txt
 “Interrupt and Exception Overview,” for an introduction to interrupt and exception handling.
+
+
+---- LOCAL AND I/O APIC OVERVIEW ----
+
+
+Each local APIC consists of a set of APIC registers (see table-1-1.png) and associated hardware that control the
+delivery of interrupts to the processor core and the generation of IPI messages. The APIC registers are memory
+mapped and can be read and written to using the MOV instruction.
+Local APICs can receive interrupts from the following sources:
+
+• Locally connected I/O devices — These interrupts originate as an edge or level asserted by an I/O device
+that is connected directly to the processor’s local interrupt pins (LINT0 and LINT1). The I/O devices may also
+be connected to an 8259-type interrupt controller that is in turn connected to the processor through one of the
+local interrupt pins.
+
+
+• Externally connected I/O devices — These interrupts originate as an edge or level asserted by an I/O
+device that is connected to the interrupt input pins of an I/O APIC. Interrupts are sent as I/O interrupt
+messages from the I/O APIC to one or more of the processors in the system.
+
+• Inter-processor interrupts (IPIs) — An Intel 64 or IA-32 processor can use the IPI mechanism to interrupt
+another processor or group of processors on the system bus. IPIs are used for software self-interrupts,
+interrupt forwarding, or preemptive scheduling.
