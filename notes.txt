@@ -1,5 +1,7 @@
-Template: https://github.com/Ian-Moffett/UEFITemplate2
+---------- Begin  ----------
 
+Template: https://github.com/Ian-Moffett/UEFITemplate2
+ANSI TEMPLATE: \033[34;1;4mHello World! 
 
 Create an array of uint8_t which will be our stack.
 We will allocate it in BSS.
@@ -105,3 +107,390 @@ void _start(struct stivale2_struct* stivale2_struct) {
     }
 
 }
+
+
+----------  IDT (Interrupt Descriptor Table)  ----------
+
+Define these:
+
+#define TRAP_GATE_FLAGS 0x8F
+#define INT_GATE_FLAGS 0x8E
+
+Create a pakced struct called idt_entry_t
+
+It will take:
+
+- uint16_t isr_low;          // Low bits of ISR.
+- uint16_t cs;               // Code segment to load before calling ISR.
+- uint8_t ist : 3;           // Interrupt stack table.
+- uint8_t reserved : 5;     
+- uint8_t attr : 4;          // Describes ISR.
+- uint8_t reserved1 : 1;
+- uint8_t dpl : 2;          // Descriptor priv level.
+- uint8_t p : 1;            // Present.
+- uint16_t isr_middle;      // Middle bits of ISR.
+- uint32_t isr_high;        // High bits of ISR.
+- uint32_t reserved2;
+
+
+Create an IDTR which will tell the CPU where IDT
+is located in memory.
+
+It will be a packed struct that takes:
+
+- uint16_t limit;
+- uint64_t base;
+
+
+Now another packed struct called int_frame_t
+which will take:
+
+- uint64_t rip;
+- uint64_t rsp;
+- uint64_t cs;
+- uint64_t rflags;
+- uint64_t rsp;
+- uint64_t ss;
+
+
+We will also need a function that sets a vector
+it will take:
+
+- uint8_t vector
+- void* isr
+- uint8_t flags
+ 
+ It will return void and do this:
+addr = (uint64_t)isr;
+idt[entry].isr_low = addr & 0xFFFF;
+idt[entry].isr_middle = (addr & 0xFFFF0000) >> 16;
+idt[entry].isr_high & (addr & 0xFFFFFFFF00000000) >> 32;
+idt[entry].dpl = 0;
+idt[entry].p = 1;
+idt[entry].attr = 0xF;
+idt[entry].cs = 0x08;
+idt[entry].reserved = 0x0;
+idt[entry].reserved2 = 0x0;
+
+
+
+---------- PCI IDE Controller  ----------
+
+Each IDE controller appears as a device on 
+the PCI bus and can be identified by 
+reading the configuration space. 
+If the class code is 0x01 
+(Mass Storage Controller) and the subclass 
+code is 0x01 (IDE), the 
+device is an IDE controller. The programming 
+interface byte(Prog If) determines 
+how you'll access it.
+
+https://wiki.osdev.org/PCI_IDE_Controller
+
+When you select a drive, you should specify the interface type and whether it is the master or slave:
+
+#define IDE_ATA        0x00
+#define IDE_ATAPI      0x01
+ 
+#define ATA_MASTER     0x00
+#define ATA_SLAVE      0x01
+
+
+We have defined everything needed by the driver, now lets move to an important part. We said that
+
+    BAR0 is the start of the I/O ports used by the primary channel.
+    BAR1 is the start of the I/O ports which control the primary channel.
+    BAR2 is the start of the I/O ports used by secondary channel.
+    BAR3 is the start of the I/O ports which control secondary channel.
+    BAR4 is the start of 8 I/O ports controls the primary channel's Bus Master IDE.
+    BAR4 + 8 is the Base of 8 I/O ports controls secondary channel's Bus Master IDE. 
+
+So we can make this global structure:
+
+
+struct IDEChannelRegisters {
+   unsigned short base;  // I/O Base.
+   unsigned short ctrl;  // Control Base
+   unsigned short bmide; // Bus Master IDE
+   unsigned char  nIEN;  // nIEN (No Interrupt);
+} channels[2];
+
+
+---------- PIC INIT  ----------
+
+First, we need to save the bitmask of the
+slave and master chip.
+
+A bitmask is basically just some bits that control
+if certain interrupts will be sent to the CPU
+or not.
+
+So do:
+
+uint8_t master_bm, slave_bm
+master_bm = inportb(PIC1_DATA);
+io_wait();                          // To wait for PIC to catch up.
+slave_bm = inportb(PIC2_DATA);
+io_wait();
+
+Now we need initalize the master PIC chip so
+do:
+
+outportb(PIC1_COMMAND, ICW1_INIT | ICW1_ICW4);
+io_wait();
+
+Now initalize the slave PIC chip so we do:
+
+outportb(PIC2_COMMAND, ICW1_INIT | ICW1_ICW4);
+io_wait();
+
+Now we tell PIC their interrupt offsets to avoid
+collisions with exception offsets due to a design flaw
+with IBM or something.
+
+Do:
+
+outportb(PIC1_DATA, 0x20);
+io_wait();
+outportb(PIC2_DATA, 0x28);
+io_wait();
+
+We we have to tell the two PIC chips about
+each others existance.
+
+outportb(PIC1_DATA, 4);
+io_wait();
+outportb(PIC2_DATA, 2);
+io_wait();
+
+We will also have to make them operate in
+8086 mode.
+
+outportb(PIC1_DATA, ICW4_8086);
+io_wait();
+outportb(PIC2_DATA, ICW4_8086);
+io_wait();
+
+Now restore the bitmask:
+
+outportb(PIC1_DATA, master_bm);
+io_wait();
+outportb(PIC2_DATA, slave_bm);
+
+
+---------- PCI IDE  ----------
+
+If you open your case up and take a look at your motherboard, you 
+will most likely see one or two (or possibly more) of the slots. 
+
+The white and green ports are IDE ports, 
+also known as channels. In this example there 
+are both primary and secondary IDE channels which 
+only PATA can be connected to; 
+this means that it only supports PATA/PATAPI drives.
+
+
+
+BAR0 is the start of the I/O ports used by the primary channel.
+BAR1 is the start of the I/O ports which control the primary channel.
+BAR2 is the start of the I/O ports used by secondary channel.
+BAR3 is the start of the I/O ports which control secondary channel.
+BAR4 is the start of 8 I/O ports controls the primary channel's Bus Master IDE.
+BAR4 + 8 is the Base of 8 I/O ports controls secondary channel's Bus Master IDE. 
+
+
+So we can make this global structure:
+
+typedef struct {
+   unsigned short base;  // I/O Base.
+   unsigned short ctrl;  // Control Base
+   unsigned short bmide; // Bus Master IDE
+   unsigned char  nIEN;  // nIEN (No Interrupt);
+} ide_channel_regs;
+
+ATA_CMD_IDENTIFY_PACKET and ATA_CMD_IDENTIFY 
+return a buffer of 512 bytes called the 
+identification 
+space; the following definitions are used 
+to read information from the identification space. 
+
+We also need a buffer to read the 
+identification space into, we need a variable 
+that indicates if an irq is invoked or not, 
+and finally we need an array of 6 words 
+[12 bytes] for ATAPI Drives
+
+static unsigned char ide[2048] = {0};
+volatile static unsigned char irq_invoked = 0;
+static unsigned char atapi_packet[12] = {0xA8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+
+ATAPI refers to devices that use the Packet Interface of the ATA6 
+(or higher) standard command set. It is basically a way 
+to issue SCSI commands to a CD-ROM, CD-RW, DVD, or 
+tape drive, attached to the ATA bus.
+
+ATAPI uses a very small number of ATA commands. 
+The most important are the PACKET command (0xA0), 
+and IDENTIFY PACKET DEVICE (0xA1). 
+
+SCSI (pronounced SKUH-zee and sometimes 
+colloquially known as "scuzzy"), the Small Computer 
+System Interface, is a set of 
+American National Standards Institute (ANSI) 
+standard electronic interfaces that allow personal 
+computers (PCs) to communicate with peripheral 
+hardware such as disk drives, tape drives, CD-ROM
+
+We said the the IDE can contain up to 4 drives:
+
+typedef struct  {
+   unsigned char  Reserved;    // 0 (Empty) or 1 (This Drive really exists).
+   unsigned char  Channel;     // 0 (Primary Channel) or 1 (Secondary Channel).
+   unsigned char  Drive;       // 0 (Master Drive) or 1 (Slave Drive).
+   unsigned short Type;        // 0: ATA, 1:ATAPI.
+   unsigned short Signature;   // Drive Signature
+   unsigned short Capabilities;// Features.
+   unsigned int   CommandSets; // Command Sets Supported.
+   unsigned int   Size;        // Size in Sectors.
+   unsigned char  Model[41];   // Model in string.
+} ide_devices;
+
+
+Create global array of 4 ide_devices.
+
+Create this helper function for reading registers:
+
+(CALLED LIKE ide_read(channel, ATA_REG_STATUS);)
+
+unsigned char ide_read(unsigned char channel, unsigned char reg) {
+   unsigned char result;
+
+   if (reg > 0x07 && reg < 0x0C) {
+      ide_write(channel, ATA_REG_CONTROL, 0x80 | channels[channel].nIEN);
+    }
+
+   if (reg < 0x08) {
+      result = inportb(channels[channel].base + reg - 0x00);
+    } else if (reg < 0x0C) {
+      result = inportb(channels[channel].base  + reg - 0x06);
+    } else if (reg < 0x0E) {
+      result = inportb(channels[channel].ctrl  + reg - 0x0A);
+    } else if (reg < 0x16) {
+      result = inportb(channels[channel].bmide + reg - 0x0E);
+    }
+   
+   if (reg > 0x07 && reg < 0x0C) {
+      ide_write(channel, ATA_REG_CONTROL, channels[channel].nIEN);
+    }
+
+   return result;
+}
+
+And one for writing registers:
+
+void ide_write(unsigned char channel, unsigned char reg, unsigned char data) {
+   if (reg > 0x07 && reg < 0x0C) {
+      ide_write(channel, ATA_REG_CONTROL, 0x80 | channels[channel].nIEN);
+    }
+
+   if (reg < 0x08) {
+      outportb(channels[channel].base  + reg - 0x00, data);
+    } else if (reg < 0x0C) {
+      outportb(channels[channel].base  + reg - 0x06, data);
+    } else if (reg < 0x0E) {
+      outportb(channels[channel].ctrl  + reg - 0x0A, data);
+    } else if (reg < 0x16) {
+      outportb(channels[channel].bmide + reg - 0x0E, data);
+    }
+   
+   if (reg > 0x07 && reg < 0x0C) {
+      ide_write(channel, ATA_REG_CONTROL, channels[channel].nIEN);
+    }
+}
+
+
+
+
+---------- PIT  ----------
+
+Make a global static variable like this:
+
+uint16_t div = 65535;
+
+Also make a macro called BASE_FREQUENCY
+which is set to 1193180.
+
+Now make a global static variable like this:
+
+uint64_t ticks = 0;
+
+We will define setDivisor(uint16_t) like this:
+
+setDivisor(uint16_t freq) {
+
+}
+
+Inside the function check if the divisor is less then 100.
+If so then make it 100.
+
+Because if the devisor was less then 100
+that would be quite stupid.
+
+Now set the global divisor (div) to BASE_FREQUENCY
+divided by local divisor.
+Now send the command byte to port 0x43 (0x36).
+Now send a byte to IO port 0x40 and that byte will be
+a cast to a uint8_t divsor AND by 0xFF that will set the lower
+bits of the divisor.
+
+Now call io_wait().
+
+Now you need to set the higher bits of the divisor doing this:
+
+outportb(0x40, (uint8_t)((div >> 8));
+
+Now we need to create the function that sleeps so do:
+
+void sleep(uint64_t ms) {
+    uint64_t etick = ticks + (ms / 1000);
+
+    while (ticks < etick);
+}
+
+Now define the interrupt service routine.
+
+__attribute__((interrupt)) void pit_isr(int_frame_t* frame) {
+    ++ticks;
+
+    if (ticks > 1000) {
+        ticks = 0;
+    }
+
+    PIC_sendEOI(0);
+}
+
+
+Now define unmask_irq0();
+
+Which will send to the master PIC's data register (PIC1_DATA)
+a byte and that byte wil contain the current contents of
+the master PIC data register XOR by 0x1.
+
+Why?
+
+That's because it will toggle bit 1 of the PIC bitmask
+which is IRQ0 and allows IRQ0 to be sent to the CPU
+so it can call pit_isr().
+
+Now pit_init();
+
+void pit_init() {
+    setDivisor(500);
+}
+
+
+Now in kernel.c you need to add an interrupt vector
+which has the index of 0x20 to pit_isr.
+
+Also call pit_init();
