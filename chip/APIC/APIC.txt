@@ -1,0 +1,25 @@
+APIC performs two primary functions for the processor:
+- It receives interrupts from the processor’s interrupt pins, from internal sources and from an external I/O APIC
+  (or other external interrupt controller). It sends these to the processor core for handling.
+
+- In multiple processor (MP) systems, it sends 
+  and receives interprocessor interrupt 
+  (IPI) messages to and from
+  other logical processors on the system bus. IPI 
+  messages can be used to 
+  distribute interrupts among the
+  processors in the system or 
+  to execute system wide functions (such as, booting up processors or distributing
+  work among a 
+  group of processors).
+
+  The external I/O APIC is part of Intel’s system chip set. Its primaryfunction is to receive external interrupt events
+from the system and its associated I/O devices and relay them to the local APIC as interrupt messages. In MP
+systems, the I/O APIC also provides a mechanism for distributing external interrupts to the local APICs of selected
+processors or groups of processors on the system bus.
+This chapter provides a description of the local APIC and its programming interface. It also provides an overview of
+the interface between the local APIC and the I/O APIC. Contact Intel for detailed information about the I/O APIC.
+
+When a local APIC has sent an interrupt to its processor core for handling, the processor uses the interrupt and
+exception handling mechanism described in Chapter 6, “Interrupt and Exception Handling.” see interrupts/interrupts.txt
+“Interrupt and Exception Overview,” for an introduction to interrupt and exception handling.

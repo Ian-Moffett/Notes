@@ -1,0 +1,80 @@
+---- Interrupts and exception overview ----
+
+Interrupts and exceptions are events that indicate that acondition exists somewhere in the system, the processor,
+or within the currently executing program or task that requires the attention of a processor. They typically result in
+a forced transfer of execution from the currently running program or task to a special software routine or task
+called an interrupt handler or an exception handler. The action taken by a processor in response to an interrupt or
+exception is referred to as servicing or handling the interrupt or exception.
+Interrupts occur at random times during the execution of aprogram, in response to signals from hardware. System
+hardware uses interrupts to handle events external to the processor, such as requests to service peripheral devices.
+Software can also generate interrupts by executing the INT n instruction.
+Exceptions occur when the processor detects an error condition while executing an instruction, such as division by
+zero. The processor detects a variety of error conditions including protection violations, page faults, and internal
+machine faults. The machine-check architecture of the Pentium 4, Intel Xeon, P6 family, and Pentium processors
+also permits a machine-check exception to be generated when internal hardware errors and bus errors are
+detected.
+When an interrupt is received or an exception is detected, the currently running procedure or task is suspended
+while the processor executes an interrupt or exception handler. When execution of the handler is complete, the
+processor resumes execution of the interrupted procedure or task. The resumption of the interrupted procedure or
+task happens without loss of program continuity, unless recovery from an exception was not possible or an inter-
+rupt caused the currently running program to be terminated.
+
+
+
+---- Maskable Hardware Interrupts ----
+
+Any external interrupt that is delivered to the processor by means of the INTR pin or through the local APIC is called
+a maskable hardware interrupt. Maskable hardware interrupts that can be delivered through the INTR pin include
+all IA-32 architecture defined interrupt vectors from 0 through 255; those that can be delivered through the local
+APIC include interrupt vectors 16 through 255.
+
+
+---- Software-Generated Interrupts ----
+
+The INT n instruction permits interrupts to be generated from within software by supplying an interrupt vector
+number as an operand. For example, the INT 35 instruction forces an implicit call to the interrupt handler for inter-
+rupt 35.
+Any of the interrupt vectors from 0 to 255 can be used as a parameter in this instruction. If the processor’s
+predefined NMI vector is used, however, the response of the processor will not be the same as it would be from an
+NMI interrupt generated in the normal manner. If vector number 2 (the NMI vector) is used in this instruction, the
+NMI interrupt handler is called, but the processor’s NMI-handling hardware is not activated.
+Interrupts generated in software with the INT n instruction cannot be masked by the IF flag in the EFLAGS register.
+
+
+
+---- Exceptions ----
+
+
+Sources:
+
+The processor receives exceptions from three sources:
+• Processor-detected program-error exceptions.
+• Software-generated exceptions.
+• Machine-check exceptions
+
+
+Program-Error Exceptions:
+
+The processor generates one or more exceptions when it detects program errors during the execution in an appli-
+cation program or the operating system or executive. Intel 64 and IA-32 architectures define a vector number for
+each processor-detectable exception. Exceptions are classified as faults, traps, and aborts.
+
+Software-Generated Exceptions:
+
+The INTO, INT 3, and BOUND instructions permit exceptions to be generated in software. These instructions allow
+checks for exception conditions to be performed at points in the instruction stream. For example, INT 3 causes a
+breakpoint exception to be generated.
+The INT n instruction can be used to emulate exceptions in software; but there is a limitation. If INT n provides a
+vector for one of the architecturally-defined exceptions, the processor generates an interrupt to the correct vector
+(to access the exception handler) but does not push an error code on the stack. This is true even if the associated
+hardware-generated exception normally produces an error code. The exception handler will still attempt to pop an
+error code from the stack while handling the exception. Because no error code was pushed, the handler will pop off
+and discard the EIP instead (in place of the missing error code). This sends the return to the wrong location.
+
+
+Machine-Check Exceptions:
+
+The P6 family and Pentium processors provide both internal and external machine-check mechanisms for checking
+the operation of the internal chip hardware and bus transactions. These mechanisms are implementation depen-
+dent. When a machine-check error is detected, the processor signals a machine-check exception (vector 18) and
+returns an error code.
