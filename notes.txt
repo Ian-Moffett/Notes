@@ -132,9 +132,13 @@ It will take:
 - uint32_t isr_high;        // High bits of ISR.
 - uint32_t reserved2;
 
+PACK IT.
+
 
 Create an IDTR which will tell the CPU where IDT
 is located in memory.
+
+PACK IT.
 
 It will be a packed struct that takes:
 
@@ -146,7 +150,6 @@ Now another packed struct called int_frame_t
 which will take:
 
 - uint64_t rip;
-- uint64_t rsp;
 - uint64_t cs;
 - uint64_t rflags;
 - uint64_t rsp;
@@ -161,10 +164,10 @@ it will take:
 - uint8_t flags
  
  It will return void and do this:
-addr = (uint64_t)isr;
+uint64_t addr = (uint64_t)isr;
 idt[entry].isr_low = addr & 0xFFFF;
 idt[entry].isr_middle = (addr & 0xFFFF0000) >> 16;
-idt[entry].isr_high & (addr & 0xFFFFFFFF00000000) >> 32;
+idt[entry].isr_high = (addr & 0xFFFFFFFF00000000) >> 32;
 idt[entry].dpl = 0;
 idt[entry].p = 1;
 idt[entry].attr = 0xF;
